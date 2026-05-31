@@ -72,11 +72,11 @@ async function checkJobs(ctx) {
                 return false;
             }
             
-            // Ambil kalau ada hubungannya sama skill kita
+            // Ambil kalau ada hubungannya sama skill kita (Wajib coding/frontend)
             const isMatch = title.includes('react') || desc.includes('react') || 
                             title.includes('gsap') || desc.includes('gsap') || 
                             title.includes('front-end') || title.includes('frontend') ||
-                            title.includes('freelance') || title.includes('contract');
+                            title.includes('web developer') || title.includes('javascript');
             
             return isMatch;
         });
