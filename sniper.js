@@ -31,17 +31,18 @@ let pollingInterval;
 
 // Fungsi AI Pembantu (Menulis Surat Lamaran)
 async function generateProposal(jobTitle, jobDescription) {
-    const prompt = `Anda adalah seorang Freelance Front-End Developer senior yang sangat ahli dalam animasi GSAP dan React.
-Tuliskan surat lamaran kerja (Cover Letter) dalam bahasa Inggris untuk klien yang memposting proyek berikut:
+    const prompt = `You are Rafih, a humble, honest, and passionate Front-End Developer who enjoys building interactive websites using GSAP and React.
+Write a very short, polite, and realistic cover letter (max 2 paragraphs) in English to bid on this job:
 
-Judul Proyek Klien: ${jobTitle}
-Deskripsi Proyek: ${jobDescription}
+Job Title: ${jobTitle}
+Job Description: ${jobDescription}
 
-Syarat penulisan:
-1. Sangat pendek, *to the point*, dan percaya diri (Maksimal 2 paragraf).
-2. Tunjukkan bahwa Anda sudah terbiasa dengan GSAP ScrollTrigger dan optimasi performa.
-3. JANGAN pakai kata-kata kaku ala bot AI. Buat se-natural mungkin seperti manusia.
-4. Akhiri dengan "Best regards, [Your Name]".`;
+Strict Rules:
+1. Be humble, simple, and honest. Do NOT exaggerate your skills or use corporate buzzwords like "scale seamlessly for millions of users" or "highly skilled expert". Just say you enjoy coding and building web animations.
+2. Politely mention that you have experience building smooth websites with GSAP and you are eager to help them with their project.
+3. You MUST include this exact link in your proposal: "I recently built a portfolio to showcase my GSAP animations. I would be very happy if you could take a quick look: https://porto-v-2-1.vercel.app/"
+4. Keep it very natural and friendly, like a normal person writing an email.
+5. Sign off respectfully with "Best regards, Rafih".`;
 
     try {
         const result = await model.generateContent(prompt);
@@ -56,36 +57,50 @@ Syarat penulisan:
 async function checkJobs(ctx) {
     console.log("Radar berputar... Mencari target nyata di internet...");
     try {
-        // Kita pakai jalur data (RSS) dari WeWorkRemotely (portal job remote global)
-        // karena bebas blokir Cloudflare.
-        const feedUrl = 'https://weworkremotely.com/categories/remote-front-end-programming-jobs.rss';
-        const feed = await parser.parseURL(feedUrl);
+        // Kita pakai Remotive API karena 100% gratis dan langsung tembus ke web asli klien (Greenhouse/Lever dll)
+        const response = await fetch('https://remotive.com/api/remote-jobs?category=software-dev&search=front%20end');
+        const data = await response.json();
+        const feed = data.jobs || [];
 
-        // Filter pekerjaan: Cuma mau yang ada tulisan "React" atau "GSAP"
-        const targetJobs = feed.items.filter(job => 
-            job.title.toLowerCase().includes('react') || 
-            job.contentSnippet?.toLowerCase().includes('react') ||
-            job.title.toLowerCase().includes('gsap') ||
-            job.contentSnippet?.toLowerCase().includes('gsap')
-        );
+        // Filter pekerjaan: Cuma cari yang cocok buat Freelancer / Mid-Level
+        const targetJobs = feed.filter(job => {
+            const title = job.title.toLowerCase();
+            const desc = job.description?.toLowerCase() || "";
+            
+            // Skip kalau ada kata-kata level dewa/kantoran
+            if (title.includes('senior') || title.includes('lead') || title.includes('staff') || title.includes('principal') || title.includes('manager')) {
+                return false;
+            }
+            
+            // Ambil kalau ada hubungannya sama skill kita
+            const isMatch = title.includes('react') || desc.includes('react') || 
+                            title.includes('gsap') || desc.includes('gsap') || 
+                            title.includes('front-end') || title.includes('frontend') ||
+                            title.includes('freelance') || title.includes('contract');
+            
+            return isMatch;
+        });
 
         if (targetJobs.length > 0) {
             // Ambil pekerjaan terbaru yang sesuai kriteria kita
             const targetAsli = targetJobs[0];
 
-            if (!seenJobs.has(targetAsli.guid)) {
-                seenJobs.add(targetAsli.guid);
+            if (!seenJobs.has(targetAsli.id)) {
+                seenJobs.add(targetAsli.id);
                 
                 ctx.reply(`⚠️ TARGET NYATA TERDETEKSI!\nProyek: ${targetAsli.title}\n\n🤖 Gemini sedang mengetik proposal... ⏳`);
                 
-                // Perintah AI jalan di sini
-                const proposal = await generateProposal(targetAsli.title, targetAsli.contentSnippet || "Front-End Developer Job");
+                // Bersihkan HTML dari deskripsi buat Gemini biar gak bingung dan hemat token
+                const cleanDesc = targetAsli.description.replace(/<[^>]*>?/gm, '').substring(0, 800);
+                const proposal = await generateProposal(targetAsli.title, cleanDesc);
                 
                 // Rakit pesan akhir yang dikirim ke Telegram lu
                 const pesan = `🎯 <b>PROYEK NYATA BARU!</b> 🎯\n\n` +
                               `<b>Judul:</b> ${targetAsli.title}\n` +
-                              `<b>Sumber:</b> We Work Remotely\n\n` +
-                              `🔗 <b>Lamar Sekarang:</b> <a href="${targetAsli.link}">Klik Di Sini</a>\n\n` +
+                              `<b>Perusahaan:</b> ${targetAsli.company_name}\n` +
+                              `<b>Tipe:</b> ${targetAsli.job_type}\n` +
+                              `<b>Sumber:</b> Remotive (Tanpa Login)\n\n` +
+                              `🔗 <b>Lamar Sekarang:</b> <a href="${targetAsli.url}">Klik Di Sini</a>\n\n` +
                               `=====================\n` +
                               `🤖 <b>AUTO-PROPOSAL DARI AI:</b>\n<pre>${proposal}</pre>\n` +
                               `=====================\n(Tinggal Copy-Paste aja bos!)`;
